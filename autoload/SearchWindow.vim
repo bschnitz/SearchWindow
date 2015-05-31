@@ -221,7 +221,7 @@ func! s:swin.OpenSearchResult()
     let l:destwin_mark = self.active_window
     let l:destwin = ToolBox#WindowMarkers#GetWindowNumberByMark(l:destwin_mark)
     if empty(l:destwin)
-      echoerr "Window to open search result in does not found!"
+      echoerr "Window to open search result in not found!"
       return
     endif
   endif
