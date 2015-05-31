@@ -231,14 +231,14 @@ func! s:swin.OpenSearchResult()
 
   " test if the cursor is positioned in a line with a result
   let l:curlnr = line('.')
-  let l:dstlnr = TestLineStartsWithNumber(l:curlnr)
+  let l:dstlnr = self.TestLineStartsWithNumber(l:curlnr)
   if l:dstlnr == ""
     return
   endif
 
   " find the line containing the filename
   let l:curlnr = l:curlnr - 1
-  while l:curlnr > 1 && TestLineStartsWithNumber(l:curlnr) != ""
+  while l:curlnr > 1 && self.TestLineStartsWithNumber(l:curlnr) != ""
     let l:curlnr = l:curlnr - 1
   endwhile
 
