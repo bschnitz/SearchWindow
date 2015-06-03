@@ -17,7 +17,7 @@ while(<STDIN>)
   if( $file ne $filenew )
   {
     $fileabs = File::Spec->rel2abs($filenew);
-    push @lines, sprintf( "\nF %s", $fileabs );
+    push @lines, sprintf( "\n%s", $fileabs );
     $file = $filenew;
   }
 
