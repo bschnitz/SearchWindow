@@ -8,8 +8,11 @@
 " · GNU grep and GNU find (contained in GNU findutils)
 " · xargs supportting -0
 " Comments:     
-" The Commands for finding files and searching in them can be configured, so the
-" dependencies only apply to the unconfigured command chain.
+" · The search window is the window containing the list of all matches
+" · The result window is the window which holds a buffer for a file in which one
+"   or more matches were located
+" · The Commands for finding files and searching in them can be configured, so
+"   the dependencies only apply to the unconfigured command chain.
 "
 " Additional Comment:
 " · The code in this file shall be at most 80 characters in width
@@ -22,44 +25,80 @@ let g:loaded_SearchWindow = 1
 
 "H Settings
 
-let s:plugindir = fnamemodify(resolve(expand('<sfile>:p')), ':h')
-let s:format_grep = fnamemodify(s:plugindir, ':h') . '/scripts/format_grep.pl'
+" this function loads the default configuration of the search window
+func! SearchWindow#Configure() dict
+  " path to the file where the results shall be written to
+  let self.resultsfile = 'SearchWindowResults'
 
-" prototype for SearchWindow class objects
-let s:swin = {}
+  " root of the search
+  let self.searchpath = '.'
 
-" path to the file where the results shall be written to
-let s:swin.resultsfile = 'SearchWindowResults'
+  " modifiers for the split command issued when opening the search window
+  let self.splitmods = 'botright'
 
-" root of the search
-let s:swin.searchpath = '.'
+  " the command, which is used to collect the results; can be configured
+  let self.cmd = 
+    \'find %(findargs) %(searchpath) %(findexpression) -print0 | sort |'.
+    \'xargs -0 grep -Hn %(grepargs) %(pattern) > %(resultsfile)'
 
-" xargs command
-let s:xargs = 'xargs -0'
+  let self.arguments = {
+  \  '%(findargs)'       : '',
+  \  '%(searchpath)'     : self.searchpath,
+  \  '%(findexpression)' : '',
+  \  '%(grepargs)'       : '',
+  \  '%(resultsfile)'    : self.resultsfile,
+  \  '%(pattern)'        : ''
+  \}
 
-" modifiers for the split command issued when opening the search window
-let s:splitmods = 'botright'
+  " highlighting for the line containing the match result window
+  let self.hi_group_matchline = 'WildMenu'
 
-" the command, which is used to collect the results; can be configured
-let s:swin.cmd = 
-      \'find %(findargs) %(searchpath) %(findexpression) -print0 | '.
-      \'xargs -0 grep -Hn %(grepargs) %(pattern) > %(resultsfile)'
+  " highlighting for the match (search window and result window)
+  let self.hi_group_match = 'Search'
 
-let s:swin.arguments = {
-\  '%(findargs)'       : '',
-\  '%(searchpath)'     : s:swin.searchpath,
-\  '%(findexpression)' : '',
-\  '%(grepargs)'       : '',
-\  '%(resultsfile)'    : s:swin.resultsfile,
-\  '%(pattern)'        : ''
-\}
+  " default mapping for opening a file containing a result in the result window
+  let self.map_open_result = '<space>'
+
+  " filetype of the window containing the matches
+  let self.filetype = ''
+
+  " this function is executed after the buffer of the results window was loaded
+  let self.OnLoadResultsWindowBuffer =
+        \function('SearchWindow#OnLoadResultsWindowBuffer')
+
+  " this function is executed directly after the search window was loaded
+  let self.OnLoadSearchWindowBuffer =
+        \function('SearchWindow#OnLoadSearchWindowBuffer')
+
+  " for each line in the search wind., which contains a result, this is executed
+  " let self.FormatOutputLine = \function('SearchWindow#FormatCppOutputLine')
+endfunc
 
 "H Implementation
 
 " creates a new object of the SearchWindow class
+"
+" Usage:
+" let swin = SearchWindow#CreateNewInstance()
 func! SearchWindow#CreateNewInstance()
-  let l:instance = copy(s:swin)
-  return l:instance
+  let l:swin = {
+        \ 'SetResultsFile'     : function('SearchWindow#SetResultsFile'),
+        \ 'SetSearchPath'      : function('SearchWindow#SetSearchPath'),
+        \ 'ReloadSearchWindow' : function('SearchWindow#ReloadSearchWindow'),
+        \ 'Search'             : function('SearchWindow#Search'),
+        \ 'FormatGrepOutput'   : function('SearchWindow#FormatGrepOutput'),
+        \ 'SearchWindowIsOpen' : function('SearchWindow#SearchWindowIsOpen'),
+        \ 'CurrentWindowIsSearchWindow' :
+                \ function('SearchWindow#CurrentWindowIsSearchWindow'),
+        \ 'GoToSearchWindow'   : function('SearchWindow#GoToSearchWindow'),
+        \ 'OpenSearchWindow'   : function('SearchWindow#OpenSearchWindow'),
+        \ 'GoToSearchResult'   : function('SearchWindow#GoToSearchResult'),
+        \ 'GetResultInfo'      : function('SearchWindow#GetResultInfo'),
+        \ 'OpenSearchResult'   : function('SearchWindow#OpenSearchResult'),
+        \ 'Configure'          : function('SearchWindow#Configure'),
+  \}
+  call l:swin.Configure()
+  return l:swin
 endfunc
 
 " closes unclosed c comments ('/*') and '#if 0' statements
@@ -83,11 +122,45 @@ func! SearchWindow#FormatCppOutputLine(line)
   return l:line
 endfunc
 
+" this function is executed directly after the search window was loaded
+"
+" Comment:
+" to have the actual matches highlighted, self.pattern must be set to the search
+" pattern provided to the grep command
+func SearchWindow#OnLoadSearchWindowBuffer() dict
+  let l:mapping = self.map_open_result . ' :call OpenProjectSearchResult()<cr>'
+  exe 'nnoremap <buffer> ' . l:mapping
+  normal zR
+  setlocal nomodifiable
+  let &ft = self.filetype
+  if exists('self.matchid') | call matchdelete(self.matchid) | endif
+  if exists('self.pattern') && self.hi_group_match != ""
+    let self.matchid = matchadd(self.hi_group_match, '\c'.self.pattern)
+  endif
+endfunc
+
+" this function is executed after the buffer of the results window was loaded
+"
+" Comment:
+" to have the actual matches highlighted, self.pattern must be set to the search
+" pattern provided to the grep command
+func SearchWindow#OnLoadResultsWindowBuffer(lnr) dict
+  call clearmatches()
+
+  if self.hi_group_matchline != ""
+    call matchadd(self.hi_group_matchline, '\%'.a:lnr.'l\S.*\S\s*')
+  endif
+
+  if exists('self.pattern') && self.hi_group_match != ""
+    call matchadd(self.hi_group_match, '\c'.self.pattern)
+  endif
+endfunc
+
 " set the path of the file the results will be written to
 "
 " Comment:
 " sets self.resultsfile and self.arguments['%(resultsfile)']
-func! s:swin.SetResultsFile( file )
+func! SearchWindow#SetResultsFile( file ) dict
   let self.resultsfile = a:file
   let self.arguments['%(resultsfile)'] = a:file
 endfunc
@@ -96,7 +169,7 @@ endfunc
 "
 " Comment:
 " sets self.searchpath and self.arguments['%(searchpath)']
-func! s:swin.SetSearchPath( path )
+func! SearchWindow#SetSearchPath( path ) dict
   let self.searchpath = a:path
   let self.arguments['%(searchpath)'] = a:path
 endfunc
@@ -105,7 +178,7 @@ endfunc
 "
 " stay - optional (defaults to 1)
 "        if 0, move the window focus to the search window
-func! s:swin.ReloadSearchWindow(...)
+func! SearchWindow#ReloadSearchWindow(...) dict
   let l:stay = a:0 == 0 || a:1 == 1
   if ! self.CurrentWindowIsSearchWindow()
     let self.active_window = ToolBox#WindowMarkers#MarkWindow()
@@ -133,7 +206,7 @@ endfunc
 " open_search_window
 "          - (optional, default is 0)
 "            if not 0, open the search window, if it isn't alreay open
-func! s:swin.Search(arguments, ...)
+func! SearchWindow#Search(arguments, ...) dict
   let l:arguments = a:arguments
   call extend( l:arguments, self.arguments, "keep" )
   let l:stay = a:0 > 0 ? a:1 : 1
@@ -164,7 +237,7 @@ endfunc
 "   <linenr>  <match1 for filepath>
 "   <linenr>  <match2 for filepath>
 "   ...
-func! s:swin.FormatGrepOutput(file)
+func! SearchWindow#FormatGrepOutput(file) dict
   let l:lines = readfile(a:file)
   let l:lines_out = []
 
@@ -194,7 +267,7 @@ endfunc
 "
 " Return Value:
 " 1 if it exists, 0 otherwise
-func! s:swin.SearchWindowIsOpen()
+func! SearchWindow#SearchWindowIsOpen() dict
   if exists('self.result_window') && self.result_window !=# ""
     if ToolBox#WindowMarkers#MarkedWindowExists(self.result_window)
       return 1
@@ -211,7 +284,7 @@ endfunc
 "
 " Return Value:
 " 1 if the current window is the search window, 0 otherwise
-func! s:swin.CurrentWindowIsSearchWindow()
+func! SearchWindow#CurrentWindowIsSearchWindow() dict
   if ! self.SearchWindowIsOpen()
     return 0
   else
@@ -223,7 +296,7 @@ endfunc
 "
 " Return Value:
 " 1, if successful, 0 else
-func! s:swin.GoToSearchWindow()
+func! SearchWindow#GoToSearchWindow() dict
   if self.SearchWindowIsOpen()
     let l:ok = ToolBox#WindowMarkers#GoToWindowByMark(self.result_window)
     return len(l:ok) > 0 ? 1 : 0
@@ -239,7 +312,7 @@ endfunc
 "
 " Return Value:
 " the identifying mark of the search window
-func! s:swin.OpenSearchWindow(...)
+func! SearchWindow#OpenSearchWindow(...) dict
   let l:stay = a:0 == 0 || a:1 == 1
 
   if self.CurrentWindowIsSearchWindow()
@@ -251,7 +324,7 @@ func! s:swin.OpenSearchWindow(...)
   else
     let self.active_window = ToolBox#WindowMarkers#MarkWindow()
     let l:resfile = self.resultsfile
-    exec s:splitmods ." split ". l:resfile
+    exec self.splitmods ." split ". l:resfile
     let self.result_window = ToolBox#WindowMarkers#MarkWindow()
     if exists("*self.OnLoadSearchWindowBuffer")
       call self.OnLoadSearchWindowBuffer()
@@ -273,9 +346,13 @@ endfunc
 "
 " Additional Comment:
 " opens all folds to ensure, that the result is visible immediately
-func! s:swin.GoToSearchResult( filepath, lnr )
+func! SearchWindow#GoToSearchResult( filepath, lnr ) dict
   " open the result:
   exe "edit " . a:filepath
+
+  if exists("*self.OnLoadResultsWindowBuffer")
+    call self.OnLoadResultsWindowBuffer(a:lnr)
+  endif
 
   " position the cursor on the line containing the result
   call setpos(".", [0, a:lnr, 0, 0])
@@ -284,7 +361,7 @@ func! s:swin.GoToSearchResult( filepath, lnr )
   normal zR
 
   " highlight the line with the result:
-  exe 'match WildMenu /\%'.a:lnr.'l\S.*\S\s*/'
+  " exe 'match WildMenu /\%'.a:lnr.'l\S.*\S\s*/'
 
   " center the line the cursor is on (d.i. the line containing the result)
   normal zz
@@ -300,7 +377,7 @@ endfunc
 " a list of the form [ l:filename, l:lnr ], where l:filename is the file
 " containing the result and l:lnr the line with the result in that file; if the
 " current line does not contain a search result, returns ['', 0]
-func! s:swin.GetResultInfo()
+func! SearchWindow#GetResultInfo() dict
   " find the line containing the file name (this must not start with a number)
   let l:linenr = ToolBox#FindLineBackwards( '^\(\s*\d\)\@!\S' )
 
@@ -332,7 +409,7 @@ endfunc
 " tabnr - (optional, defaults to 0)
 "         the number of the tab containing the window to open the result in;
 "         if 0, use the current tab (if winnr is 0, this has no effekt)
-func! s:swin.OpenSearchResult()
+func! SearchWindow#OpenSearchResult() dict
   let l:tabnr = a:0 > 1 ? a:2 : 0
   let l:winnr = a:0 > 0 ? a:1 : 0
   let l:destwin = [l:tabnr, l:winnr]
