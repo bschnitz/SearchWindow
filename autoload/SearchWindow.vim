@@ -60,7 +60,7 @@ func! SearchWindow#Configure() dict
   let self.map_open_result = '<space>'
 
   " filetype of the window containing the matches
-  let self.filetype = ''
+  let self.filetype = 'autodetect'
 
   " this function is executed after the buffer of the results window was loaded
   let self.OnLoadResultsWindowBuffer =
@@ -130,10 +130,29 @@ endfunc
 func SearchWindow#OnLoadSearchWindowBuffer() dict
   let l:mapping = self.map_open_result . ' :call OpenProjectSearchResult()<cr>'
   exe 'nnoremap <buffer> ' . l:mapping
+
+  " open all folds, since folding by syntax does not make much sense
   normal zR
+
+  " prevent user from making changed and vim from complaining about them
   setlocal nomodifiable
-  let &ft = self.filetype
-  if exists('self.matchid') | call matchdelete(self.matchid) | endif
+
+  " avoid vim complaining about buffer changes (since the search window buffer
+  " is modified outside an will be reloaded by this script when needed)
+  setlocal buftype=nofile
+
+  if self.filetype == 'autodetect' && exists('self.ft_detected')
+    let &ft = self.ft_detected
+  else
+    let &ft = self.filetype
+  endif
+
+  " clear existing highlighting for matches and add new ones
+  if exists('self.matchid')
+    " it may happend, that the file was immediatly unloaded and the match does
+    " not exist, so matchdelete will fail; do not bother with it !
+    try | call matchdelete(self.matchid) | catch | endtry
+  endif
   if exists('self.pattern') && self.hi_group_match != ""
     let self.matchid = matchadd(self.hi_group_match, '\c'.self.pattern)
   endif
@@ -186,7 +205,7 @@ func! SearchWindow#ReloadSearchWindow(...) dict
   else
     let l:stay = 0
   endif
-  edit!
+  view!
   if exists("*self.OnLoadSearchWindowBuffer")
     call self.OnLoadSearchWindowBuffer()
   endif
@@ -244,10 +263,17 @@ func! SearchWindow#FormatGrepOutput(file) dict
   call add(l:lines_out, len(l:lines) . " results")
 
   let l:file = ""
+  let l:firstfile = ""
   for l:line in l:lines
     let l:split = matchlist( l:line, '^\(.\{-}\):\(.\{-}\):\(.\{-}\)$' )
+    if( len(l:split) < 4 )
+      call add(l:lines_out, "")
+      call add(l:lines_out, l:line)
+      continue
+    endif
     let [ l:all, l:filenew, l:linenr, l:match; l:rest ] = l:split
     if l:file !=# l:filenew
+      if l:firstfile == "" | let l:firstfile = l:file | endif
       let l:fileabs = ToolBox#GetAbsPath(self.searchpath, l:filenew)
       let l:fileabs = resolve(expand(l:fileabs))
       call add(l:lines_out, "")
@@ -259,6 +285,8 @@ func! SearchWindow#FormatGrepOutput(file) dict
     endif
     call add( l:lines_out, printf("%4d  ", l:linenr).l:match )
   endfor
+
+  let self.ft_detected = ToolBox#DetectFiletype( l:firstfile )
 
   call writefile(l:lines_out, a:file)
 endfunc
@@ -272,8 +300,6 @@ func! SearchWindow#SearchWindowIsOpen() dict
     if ToolBox#WindowMarkers#MarkedWindowExists(self.result_window)
       return 1
     else
-      call confirm( self.result_window )
-      call confirm( ToolBox#WindowMarkers#MarkedWindowExists(self.result_window) )
       let self.result_window = ""
     endif
   endif
@@ -324,7 +350,7 @@ func! SearchWindow#OpenSearchWindow(...) dict
   else
     let self.active_window = ToolBox#WindowMarkers#MarkWindow()
     let l:resfile = self.resultsfile
-    exec self.splitmods ." split ". l:resfile
+    exec self.splitmods ." sview ". l:resfile
     let self.result_window = ToolBox#WindowMarkers#MarkWindow()
     if exists("*self.OnLoadSearchWindowBuffer")
       call self.OnLoadSearchWindowBuffer()
