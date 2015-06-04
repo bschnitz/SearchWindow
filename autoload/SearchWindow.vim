@@ -17,7 +17,7 @@
 " Additional Comment:
 " · The code in this file shall be at most 80 characters in width
 
-if exists("g:loaded_SearchWindow")
+if exists("g:loaded_SearchWindow") || version < 700
   finish
 endif
 let g:loaded_SearchWindow = 1
