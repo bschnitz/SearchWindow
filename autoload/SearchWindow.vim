@@ -57,7 +57,10 @@ func! SearchWindow#Configure() dict
   let self.hi_group_match = 'Search'
 
   " default mapping for opening a file containing a result in the result window
-  let self.map_open_result = '<space>'
+  let self.key_open_result = '<space>'
+
+  " function for opening the result (must be provided)
+  let self.func_open_result = ''
 
   " filetype of the window containing the matches
   let self.filetype = 'autodetect'
@@ -69,10 +72,16 @@ func! SearchWindow#Configure() dict
   " this function is executed directly after the search window was loaded
   let self.OnLoadSearchWindowBuffer =
         \function('SearchWindow#OnLoadSearchWindowBuffer')
-
-  " for each line in the search wind., which contains a result, this is executed
-  " let self.FormatOutputLine = \function('SearchWindow#FormatCppOutputLine')
 endfunc
+
+let s:id_generator = 0
+
+" s:instances will store references to each search window created by
+" CreateNewInstance; this is used to be able to create internal mappings for a
+" search window, since we need a reference to an existing instance to create a
+" mapping. if we would't store these references, the created instances go out of
+" scope.
+let s:instances = {}
 
 "H Implementation
 
@@ -81,6 +90,7 @@ endfunc
 " Usage:
 " let swin = SearchWindow#CreateNewInstance()
 func! SearchWindow#CreateNewInstance()
+  let s:id_generator += 1
   let l:swin = {
         \ 'SetResultsFile'     : function('SearchWindow#SetResultsFile'),
         \ 'SetSearchPath'      : function('SearchWindow#SetSearchPath'),
@@ -96,30 +106,30 @@ func! SearchWindow#CreateNewInstance()
         \ 'GetResultInfo'      : function('SearchWindow#GetResultInfo'),
         \ 'OpenSearchResult'   : function('SearchWindow#OpenSearchResult'),
         \ 'Configure'          : function('SearchWindow#Configure'),
+        \ 'id'                 : s:id_generator
   \}
+  let s:instances[s:id_generator] = l:swin
   call l:swin.Configure()
   return l:swin
 endfunc
 
-" closes unclosed c comments ('/*') and '#if 0' statements
+" call self.OpenSearchResult() for the search window specified by <swin_id>
 "
-" Comment:
-" this is useful if you want to enable syntax highlighting in the results file,
-" since lines with unclosed comments or #if 0 would break the highlighting until
-" they are closed on another line.
+" Arguments:
+" swin_id - the id of a search window instance
+func s:OpenSearchResult(swin_id)
+  call s:instances[a:swin_id].OpenSearchResult()
+endfunc
+
+" get the search window instance specified by the id
 "
-" Usage:
-" enable this functionality with:
-" let swin.FormatOutputLine = function("SearchWindow#FormatCppOutputLine")
-func! SearchWindow#FormatCppOutputLine(line)
-  " nicht geschlossene mehrzeilige Kommentare (/* ...) schließen
-  let l:pattern = '\(\/\*\(\(\*\/\)\@!.\)*\)$'
-  let l:line = substitute(a:line, l:pattern, '\1 *** closed comment */', '')
-
-  " #if 0 abschließen
-  let l:line = substitute(l:line,'\(#if\s*0.*\)$' , '\1 #', '')
-
-  return l:line
+" Arguments:
+" swin_id - the id of a search window instance
+"
+" Return Value:
+" the search window instance specified by <swin_id>
+func! SearchWindow#GetInstance(swin_id)
+  return s:instances[a:swin_id]
 endfunc
 
 " this function is executed directly after the search window was loaded
@@ -128,8 +138,8 @@ endfunc
 " to have the actual matches highlighted, self.pattern must be set to the search
 " pattern provided to the grep command
 func SearchWindow#OnLoadSearchWindowBuffer() dict
-  let l:mapping = self.map_open_result . ' :call OpenProjectSearchResult()<cr>'
-  exe 'nnoremap <buffer> ' . l:mapping
+  exe 'nnoremap <buffer> ' . self.key_open_result .
+        \ ' :call <SID>OpenSearchResult('.self.id.')<cr>'
 
   " open all folds, since folding by syntax does not make much sense
   normal zR
@@ -143,7 +153,7 @@ func SearchWindow#OnLoadSearchWindowBuffer() dict
 
   if self.filetype == 'autodetect' && exists('self.ft_detected')
     let &ft = self.ft_detected
-  else
+  elseif self.filetype != ''
     let &ft = self.filetype
   endif
 
@@ -376,10 +386,6 @@ func! SearchWindow#GoToSearchResult( filepath, lnr ) dict
   " open the result:
   exe "edit " . a:filepath
 
-  if exists("*self.OnLoadResultsWindowBuffer")
-    call self.OnLoadResultsWindowBuffer(a:lnr)
-  endif
-
   " position the cursor on the line containing the result
   call setpos(".", [0, a:lnr, 0, 0])
 
@@ -391,6 +397,10 @@ func! SearchWindow#GoToSearchResult( filepath, lnr ) dict
 
   " center the line the cursor is on (d.i. the line containing the result)
   normal zz
+
+  if exists("*self.OnLoadResultsWindowBuffer")
+    call self.OnLoadResultsWindowBuffer(a:lnr)
+  endif
 endfunc
 
 " analyzes a result in the search window and returns its location
