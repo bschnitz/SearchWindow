@@ -27,12 +27,6 @@ let g:loaded_SearchWindow = 1
 
 " this function loads the default configuration of the search window
 func! SearchWindow#Configure() dict
-  " path to the file where the results shall be written to
-  let self.resultsfile = 'SearchWindowResults'
-
-  " root of the search
-  let self.searchpath = '.'
-
   " modifiers for the split command issued when opening the search window
   let self.splitmods = 'botright'
 
@@ -43,12 +37,14 @@ func! SearchWindow#Configure() dict
 
   let self.arguments = {
   \  '%(findargs)'       : '',
-  \  '%(searchpath)'     : self.searchpath,
+  \  '%(searchpath)'     : '.',
   \  '%(findexpression)' : '',
   \  '%(grepargs)'       : '',
-  \  '%(resultsfile)'    : self.resultsfile,
+  \  '%(resultsfile)'    : 'SearchWindowResults',
   \  '%(pattern)'        : ''
   \}
+
+  let self.resultsfile = self.arguments['%(resultsfile)']
 
   " highlighting for the line containing the match result window
   let self.hi_group_matchline = 'WildMenu'
@@ -58,9 +54,6 @@ func! SearchWindow#Configure() dict
 
   " default mapping for opening a file containing a result in the result window
   let self.key_open_result = '<space>'
-
-  " function for opening the result (must be provided)
-  let self.func_open_result = ''
 
   " filetype of the window containing the matches
   let self.filetype = 'autodetect'
@@ -93,7 +86,6 @@ func! SearchWindow#CreateNewInstance()
   let s:id_generator += 1
   let l:swin = {
         \ 'SetResultsFile'     : function('SearchWindow#SetResultsFile'),
-        \ 'SetSearchPath'      : function('SearchWindow#SetSearchPath'),
         \ 'ReloadSearchWindow' : function('SearchWindow#ReloadSearchWindow'),
         \ 'Search'             : function('SearchWindow#Search'),
         \ 'FormatGrepOutput'   : function('SearchWindow#FormatGrepOutput'),
@@ -130,6 +122,15 @@ endfunc
 " the search window instance specified by <swin_id>
 func! SearchWindow#GetInstance(swin_id)
   return s:instances[a:swin_id]
+endfunc
+
+" set the path of the file containing the list of results
+"
+" Argument:
+" resultfile - path to the resultfile
+func! SearchWindow#SetResultsFile(resultsfile) dict
+  let self.resultsfile = a:resultsfile
+  let self.arguments['%(resultsfile)'] = a:resultsfile
 endfunc
 
 " this function is executed directly after the search window was loaded
@@ -185,24 +186,6 @@ func SearchWindow#OnLoadResultsWindowBuffer(lnr) dict
   endif
 endfunc
 
-" set the path of the file the results will be written to
-"
-" Comment:
-" sets self.resultsfile and self.arguments['%(resultsfile)']
-func! SearchWindow#SetResultsFile( file ) dict
-  let self.resultsfile = a:file
-  let self.arguments['%(resultsfile)'] = a:file
-endfunc
-
-" set the directory under which will be searched
-"
-" Comment:
-" sets self.searchpath and self.arguments['%(searchpath)']
-func! SearchWindow#SetSearchPath( path ) dict
-  let self.searchpath = a:path
-  let self.arguments['%(searchpath)'] = a:path
-endfunc
-
 " reload the contents of the search window
 "
 " stay - optional (defaults to 1)
@@ -242,7 +225,8 @@ func! SearchWindow#Search(arguments, ...) dict
   let l:open_search_window = a:0 > 1 ? a:2 : 0
   let l:cmd = ToolBox#SubstituteFromDictionary(self.cmd, l:arguments)
   silent call system(l:cmd)
-  call self.FormatGrepOutput(self.resultsfile)
+  let self.resultsfile = arguments['%(resultsfile)']
+  call self.FormatGrepOutput( self.resultsfile, arguments['%(searchpath)'] )
   if l:open_search_window != 0
     call self.OpenSearchWindow()
   endif
@@ -254,6 +238,7 @@ endfunc
 " Argument:
 " file - the file where the output of the grep command was stored to, this is
 "        also the file, where the formatted output will be written back to
+" searchpath - the root path of the search
 "
 " Comment:
 " · expects the lines of the file to follow the following pattern:
@@ -266,7 +251,7 @@ endfunc
 "   <linenr>  <match1 for filepath>
 "   <linenr>  <match2 for filepath>
 "   ...
-func! SearchWindow#FormatGrepOutput(file) dict
+func! SearchWindow#FormatGrepOutput(file, searchpath) dict
   let l:lines = readfile(a:file)
   let l:lines_out = []
 
@@ -284,7 +269,7 @@ func! SearchWindow#FormatGrepOutput(file) dict
     let [ l:all, l:filenew, l:linenr, l:match; l:rest ] = l:split
     if l:file !=# l:filenew
       if l:firstfile == "" | let l:firstfile = l:file | endif
-      let l:fileabs = ToolBox#GetAbsPath(self.searchpath, l:filenew)
+      let l:fileabs = ToolBox#GetAbsPath(a:searchpath, l:filenew)
       let l:fileabs = resolve(expand(l:fileabs))
       call add(l:lines_out, "")
       call add(l:lines_out, l:fileabs)
