@@ -37,7 +37,7 @@ Highlights:
 2.1 QUICK START                                                *swin-quickstart*
 
 1. Put the following into your .vimrc
-
+>
    " create a search window instance, '<F9>' will give you a search prompt
    SearchWindow#Examples#CreateBasicSearch('<F9>')
 
@@ -82,7 +82,7 @@ result window  - the window in which a file, containing one or more matches, was
 For searching, using the SearchWindow plugin, an instance of the SearchWindow
 class must be created (and configured). This can be done using the following
 command:
-
+>
     let swin = |SearchWindow#CreateNewInstance|()
 
 A reference to every search window created will also be managed by the Plugin
@@ -90,12 +90,12 @@ itself. This might be useful for mappings, as one does not need to care about
 the lifetime or scope of the variable set above. Every search window has an id
 (swin.id), by which it can be identified. A search window instance can always
 be requested from the SearchWindow plugin by calling
-|SearchWindow#GetInstance|(id).
+|SearchWindow#GetInstance(id)|.
 
 When a search window is created, there exists yet no mapping for searching and
-opening results. Searching however can be done using the '|swin.Search|()'
-function:
-
+opening results. Searching however can be done using the
+|swin.Search(arguments,...)| function:
+>
     call swin.Search( {'%(pattern)' : 'swin'}, 0, 1 )
 
 This searches for swin under the current working directory. (Hit <control-c>,
@@ -105,17 +105,17 @@ that window. If you do not want to seach under the current working directory,
 you have to tell SearchWindow so. This can be done by specifying the root path
 of the search, either locally to a search, by providing a value for
 '%(searchpath)' or globally (to one search window object) by setting
-|swin.arguments|('%(searchpath)') .
+|swin.arguments|['%(searchpath)'] .
 
 However typing this every search is tedious. A custom Search function will help.
 One was already written and can be found in SearchWindow/Examples.vim in the
 SearchWindow Plugin's autoload path. The search window must be configured to use
 it:
-
+>
     let swin.SearchWindow = function("SearchWindow#Examples#Search")
 
 Now one can write:
-
+>
     call swin.SearchWindow( '<flags> <pattern>' )
   
 to search for a pattern. <flags> is optional; if existing, it will be provided
@@ -127,13 +127,13 @@ commented, to see, how you might adapt it to your needs.
 Yet, this is not an optimal configuration. The function is nice, a custom
 command would be better. To create such a command, first a script local function
 (it might be as well global, if you like it) is needed:
-
+>
     func! s:SearchWindow(swin_id, args)
       call SearchWindow#GetInstance(a:swin_id).SearchWindow(a:args)
     endfunc
 
 This function can be used to create a command and a mapping, for example:
-
+>
     exe 'command -nargs=* SearchWindow call '
           \'<SID>SearchWindow('.swin.id.',''<args>'')'
     nnoremap <F9> q:iSearchWindow -i '
@@ -163,39 +163,44 @@ autoload directory, which might be useful, which are not listed here.
 
 For this section, let swin be an instance of the SearchWindow class.
 
-    *SearchWindow#CreateNewInstance* () 
+    *SearchWindow#CreateNewInstance()* 
     returns a new instance of the SearchWindow class with default configuration
 
-    *SearchWindow#GetInstance* (id)
+    *SearchWindow#GetInstance(id)*
     every search window has a unique id by which it can be found
 
-    *swin.SetResultsFile* ()
+    *swin.SetResultsFile()*
     set the path to the file which shall store the list of results
 
-    *swin.OpenSearchResult* ()
+    *swin.OpenSearchResult()*
     if inside the search window and on a result, open it in the result window
 
-    *swin.OnLoadSearchWindowBuffer* ()
+    *swin.OnLoadSearchWindowBuffer()*
     this function will be executed when the search window was (re)loaded
 
-    *swin.OnLoadResultsWindowBuffer* ()
+    *swin.OnLoadResultsWindowBuffer()*
     this function will be executed when the results window loaded another file
 
-    *swin.ReloadSearchWindow* (stay)
-    reload the search window buffer (stay defaults to 1, 0 means, that the focus
-    is automatically moved to the search window)
+    *swin.ReloadSearchWindow(...)*
+    reload the search window buffer
+    Argument:
+    stay - defaults to 1, 0 means, that the focus is automatically moved to
+           the search window)
 
-    *swin.Search* (arguments, stay, open_search_window)
+    *swin.Search(arguments,...)*
     start the search
-    arguments - arguments, which override |swin.arguments|
-    stay - if 0, move the focus to the search window (optional, defaults to 1)
+    Arguments:
+    arguments          - arguments, which override |swin.arguments|
+    stay               - if 0, move the focus to the search window (optional,
+                         defaults to 1)
     open_search_window - if 1, open the search window (optional, defaults to 0)
 
-    *swin.GoToSearchWindow*
+    *swin.GoToSearchWindow()*
     move the focus to the search window (if it is open)
 
-    *swin.OpenSearchWindow*
+    *swin.OpenSearchWindow(...)*
     splits the window and opens the search window
+    Arguments:
     stay - if 0, move the focus to the search window (optional, defaults to 1)
 
 
@@ -214,6 +219,11 @@ For this section, let swin be an instance of the SearchWindow class.
         \'find %(findargs) %(searchpath) %(findexpression) -print0 | sort |'.
         \'xargs -0 grep -Hn %(grepargs) %(pattern) > %(resultsfile)'
     the command which is used for searching for matches. see |swin.arguments|.
+    If you want to chage the command, keep in mind, that the '%(searchpath)'
+    argument for the Search command will be internally used to get the
+    absolute path of the search results (so either make sure, that your
+    command only outputs absolute pathes, ore used the '%(searchpath)'
+    argument; see also |swin-advanced-usage|).
 
     *swin.arguments* = {
     \  '%(findargs)'       : '',
@@ -224,9 +234,9 @@ For this section, let swin be an instance of the SearchWindow class.
     \  '%(pattern)'        : ''
     \}
     these arguments are inserted into the placeholders in |swin.cmd|. they are
-    overruled by the arguments given to |swin.Search|.
+    overruled by the arguments given to |swin.Search(arguments,...)|.
     swin.arguments['%(resultsfile)'] should not be set manually. Use
-    |swin.SetResultsFile| instead. note, that pattern is used to highlight
+    |swin.SetResultsFile()| instead. note, that pattern is used to highlight
     matches using the |matchadd()| function of vim and to search using grep.
     this only works both at a time, if the given pattern can be used for both,
     GNU grep and |matchadd()||.
@@ -240,7 +250,7 @@ For this section, let swin be an instance of the SearchWindow class.
     disable this highlighting.
 
     *self.key_open_result* = '<space>'
-    key which is mapped to |swin.OpenSearchResult| locally to the search window
+    key which is mapped to |swin.OpenSearchResult()| locally to the search window
     buffer on the opening of the search window.
 
     *self.filetype* = 'autodetec'
@@ -261,15 +271,15 @@ internally reads arguments['%(resultsfile)'] when searching, to determine, which
 file the results of the search are written to. And you must take in mind that
 there is an internal function 'swin.FormatGrepOutput' which formats the contents
 of that file, such that it has a specific structure, which is necessary for
-|swin.OpenSearchResult| to work. For this function to be able to format the
+|swin.OpenSearchResult()| to work. For this function to be able to format the
 output, each output line must have the form <linenr>:<filepath>:<match>. So, if
 it has not that form, you might have to exchange these functions. (In the
 |Usage| section, there is an example on how to set/exchange a function of a
 search window object.)
 
-Then you might want to overwrite the |swin.OnLoadSearchWindowBuffer| and
-|swin.OnLoadResultsWindowBuffer| functions to let them operate differently on
-the opened files.
+Then you might want to overwrite the |swin.OnLoadSearchWindowBuffer()| and
+|swin.OnLoadResultsWindowBuffer()| functions to let them operate differently
+on the opened files.
 
 Have a look at the SearchWindow.vim source file, it is well documented, to see
 what the mentioned functions do and how you could replace them.
