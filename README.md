@@ -7,7 +7,7 @@ So basically it is very similar to `:vimgrep`, but it aims to be much more
 flexible and configurable and it provides a nice way of listing matches in a
 window and the possibility to navigate to them.
 
-![Screenshot](https://github.com/bschnitz/SearchWindow/tree/various/screenshot.png)
+![Screenshot](https://raw.githubusercontent.com/bschnitz/SearchWindow/various/screenshot.png)
 
 #### INSTALLATION
 
