@@ -298,7 +298,9 @@ The plugin is published unter the GNU General Public License Version 3 (GPL v3).
 ================================================================================
 8. CHANGELOG                                                    *swin-changelog*
 
+First public release: 2015/06/09~
+
 ================================================================================
 9. CONTACT                                                        *swin-contact*
 
-My e-mail address can be found in the readme for this repo on github.
+E-mail to <benjamin.schnitzler+searchwindow@googlemail.com> .
